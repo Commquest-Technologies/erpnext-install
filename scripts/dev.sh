@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Development: start bench, wait for Redis, optionally install ERPNext on site
+# Development mode: start bench, wait for Redis, optional ERPNext install
 
 setup_dev_mode() {
 	log_info "Starting development mode..."

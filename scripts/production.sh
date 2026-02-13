@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Production: setup production, ensure services, optionally install ERPNext, SSL
+# Production setup: nginx, supervisor, ERPNext install, SSL
 
 setup_production() {
 	log_info "Setting up production..."

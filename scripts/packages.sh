@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
-# System update, user creation, and package installation (Python, Node, Yarn, Redis, MariaDB, uv)
+# System update, user verification, and package installation (Python, Node, Yarn, Redis, MariaDB, uv)
 
 install_system_packages() {
 	log_info "Updating system packages..."
 	sudo apt-get update -y
 	sudo apt-get upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
 
-	log_info "Setting up user: $FRAPPE_USER"
+	log_info "Verifying user: $FRAPPE_USER"
 	if id "$FRAPPE_USER" &>/dev/null; then
-		log_success "User $FRAPPE_USER already exists"
+		log_success "User $FRAPPE_USER exists"
 	else
+		# User chose a different frappe user than the login user
 		sudo adduser --disabled-password --gecos "" "$FRAPPE_USER"
 		sudo usermod -aG sudo "$FRAPPE_USER"
 		log_success "User $FRAPPE_USER created"
 	fi
 
-	# Ensure frappe user has passwordless sudo (needed for bench setup production)
+	# Ensure passwordless sudo (needed for bench setup production)
 	if [ ! -f "/etc/sudoers.d/$FRAPPE_USER" ]; then
 		echo "$FRAPPE_USER ALL=(ALL) NOPASSWD:ALL" | sudo tee "/etc/sudoers.d/$FRAPPE_USER" >/dev/null
 		sudo chmod 440 "/etc/sudoers.d/$FRAPPE_USER"

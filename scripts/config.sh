@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Collect user input and set version-specific variables
+# Collect installation configuration from user
 
 collect_user_input() {
 	echo ""

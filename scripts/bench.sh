@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install bench CLI, initialize bench, create site, optionally get ERPNext
+# Bench CLI install, bench init, site creation, optional ERPNext download
 
 install_bench_and_site() {
 	log_info "Installing Frappe Bench..."

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Common logging and helper functions for Frappe/ERPNext installer
+# Logging and helper functions
 
 log_info() {
 	echo -e "\n\033[1;34m[INFO]\033[0m $1"

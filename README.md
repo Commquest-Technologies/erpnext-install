@@ -5,8 +5,9 @@ A modular bash script to install **Frappe Framework** and **ERPNext** on Ubuntu 
 ## Features
 
 - **Frappe v15 or v16** — choose version at install time (Python 3.10 for v15, Python 3.14 for v16)
-- Automated installation of all dependencies (Node.js, Yarn, Redis, MariaDB, uv, pipx)
-- Node.js 24 for both versions with latest bench
+- Automated installation of all dependencies (Node.js 24, Yarn, Redis, MariaDB, uv, pipx)
+- Automatic non-root user creation when run as root (ideal for fresh VPS)
+- If the user already exists, it is deleted and recreated for a clean setup
 - MariaDB setup with interactive or existing password support
 - Bench initialization with optional ERPNext app installation
 - Production-ready setup with Nginx and Supervisor
@@ -17,97 +18,56 @@ A modular bash script to install **Frappe Framework** and **ERPNext** on Ubuntu 
 ## Prerequisites
 
 - **Operating System**: Ubuntu 22.04 / 24.04 (fresh installation recommended)
-- **User Access**: A regular user with sudo privileges (do NOT run as root)
 - **RAM**: Minimum 4GB (8GB recommended for production)
 - **Storage**: Minimum 40GB free disk space
 - **Network**: Active internet connection
 
 ## Quick Start
 
-### Step 1: Download the Script
-
 ```bash
 git clone https://github.com/Commquest-Technologies/erpnext-install.git
 cd erpnext-install
-```
-
-### Step 2: Make it Executable
-
-```bash
 chmod +x frappe_installer.sh
-```
-
-### Step 3: Run the Installer
-
-```bash
 ./frappe_installer.sh
 ```
 
-## Installation Process
+You can run this as **root** (typical on a fresh VPS like Vultr, DigitalOcean, etc.) — the script will automatically create a non-root user, set a password, and re-launch itself as that user.
 
-When you run the script, you'll be prompted for the following information:
+## Installation Flow
 
-### 1. Frappe Version (15 or 16)
-```
-Enter Frappe version (15 or 16): 16
-```
-- **15** — Frappe/ERPNext v15 (Python 3.10, Node.js 24)
-- **16** — Frappe/ERPNext v16 (Python 3.14, Node.js 24)
+### Running as Root (fresh VPS)
 
-### 2. System User
 ```
-Enter system user for Frappe [frappe]:
-```
-- Linux user that will own the Frappe/ERPNext application
-- Defaults to `frappe` if left empty
-- The script will create this user if it doesn't exist
+root@server:~# ./frappe_installer.sh
 
-### 3. Bench Name
-```
-Enter bench name [frappe-bench]:
-```
-- Name of the bench directory
-- Created at: `/home/<user>/<bench-name>`
+[WARN] Running as root. A non-root user is required for Frappe.
 
-### 4. Site Name
-```
-Enter site name: mysite.local
-```
-- For local/development: use `.local` domain (e.g., `mysite.local`)
-- For production: use your actual domain (e.g., `erp.mycompany.com`)
+Enter username to create [frappe]: frappe
+[INFO] Creating user 'frappe'...
+[INFO] Set a login password for 'frappe':
+New password: ********
+Retype new password: ********
+[✓] User frappe created with sudo access
 
-### 5. Admin Password
-```
-Enter admin password:
-```
-- Password for the Administrator account
-- Choose a strong password
+[INFO] Re-launching installer as 'frappe'...
 
-### 6. Domain (Optional)
-```
-Enter domain (leave empty for dev mode):
-```
-- Enter your domain for production mode with SSL
-- Leave empty for development mode
-- Domain must be pointing to your server's IP address
-
-### 7. ERPNext Installation
-```
-Install ERPNext app? [Y/n]:
-```
-- Choose whether to install ERPNext on the site
-- If you say no, only the Frappe framework is installed
-
-### 8. MariaDB Setup
-
-The script will ask:
-```
-Do you have a MariaDB root password? (y/n):
+── installer continues automatically as frappe ──
 ```
 
-**Option A: You already have a password (y)** — Enter it and the script will verify it.
+The password you set here is for **SSH/login access** to the frappe user (`ssh frappe@your-server`). The installer itself uses passwordless sudo internally.
 
-**Option B: Fresh install (n)** — The script will let you set a new password or use socket authentication.
+### Configuration Prompts
+
+| Prompt | Description |
+|--------|-------------|
+| Frappe version (15 or 16) | v15 = Python 3.10, v16 = Python 3.14 |
+| System user [frappe] | Linux user that owns the bench |
+| Bench name [frappe-bench] | Directory name for the bench |
+| Site name | e.g. `mysite.local` or `erp.mycompany.com` |
+| Admin password | ERPNext Administrator login password |
+| Domain | Leave empty for dev mode, or enter domain for production + SSL |
+| Install ERPNext? [Y/n] | Skip to install only the Frappe framework |
+| MariaDB password | Existing password or set a new one |
 
 ## What Gets Installed
 
@@ -144,18 +104,18 @@ Do you have a MariaDB root password? (y/n):
 
 ```
 erpnext-install/
-├── frappe_installer.sh      # Main entry point
+├── frappe_installer.sh    # Main entry point
 ├── scripts/
-│   ├── common.sh            # Logging and helper functions
-│   ├── system_checks.sh     # OS and RAM checks
-│   ├── user_input.sh        # Interactive prompts
-│   ├── system_packages.sh   # Package installation (Python, Node, uv, etc.)
-│   ├── mariadb_config.sh    # MariaDB password and config
-│   ├── bench_setup.sh       # Bench init, site creation, ERPNext download
-│   ├── mode_production.sh   # Production setup (nginx, supervisor, SSL)
-│   ├── mode_dev.sh          # Development mode startup
-│   ├── firewall.sh          # UFW configuration
-│   └── summary.sh           # Post-install summary
+│   ├── utils.sh           # Logging and helper functions
+│   ├── preflight.sh       # OS checks, root-to-user handoff
+│   ├── config.sh          # Interactive configuration prompts
+│   ├── packages.sh        # System package installation
+│   ├── mariadb.sh         # MariaDB password and config
+│   ├── bench.sh           # Bench init, site creation, ERPNext download
+│   ├── production.sh      # Production setup (nginx, supervisor, SSL)
+│   ├── dev.sh             # Development mode startup
+│   ├── firewall.sh        # UFW firewall rules
+│   └── summary.sh         # Post-install summary
 ├── LICENSE
 └── README.md
 ```
