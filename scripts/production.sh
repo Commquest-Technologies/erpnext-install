@@ -27,10 +27,24 @@ PRODSETUP
 		"ANSIBLE_ALLOW_BROKEN_CONDITIONALS=true" \
 		bench setup production "$FRAPPE_USER" --yes
 
-	# Wait for Redis Queue before installing apps
-	log_info "Waiting for Redis Queue (port 11001)..."
+	# Restart supervisor to ensure all bench processes (including Redis) are running
+	log_info "Restarting supervisor processes..."
+	sudo supervisorctl reread
+	sudo supervisorctl update
+	sudo supervisorctl restart all
+	sleep 5
+
+	# Read the actual Redis Queue port from bench config
+	REDIS_QUEUE_PORT=$(python3 -c "
+import json, re
+conf = json.load(open('$BENCH_PATH/sites/common_site_config.json'))
+m = re.search(r':(\d+)', conf.get('redis_queue', ''))
+print(m.group(1) if m else '11000')
+" 2>/dev/null || echo "11000")
+
+	log_info "Waiting for Redis Queue (port $REDIS_QUEUE_PORT)..."
 	for i in {1..30}; do
-		if redis-cli -p 11001 ping &>/dev/null; then
+		if redis-cli -p "$REDIS_QUEUE_PORT" ping &>/dev/null; then
 			log_success "Redis Queue is ready"
 			break
 		fi
@@ -38,8 +52,10 @@ PRODSETUP
 		sleep 2
 	done
 
-	if ! redis-cli -p 11001 ping &>/dev/null; then
-		log_warn "Redis Queue on port 11001 is not responding. ERPNext installation may fail."
+	if ! redis-cli -p "$REDIS_QUEUE_PORT" ping &>/dev/null; then
+		log_warn "Redis Queue on port $REDIS_QUEUE_PORT is not responding. ERPNext installation may fail."
+		log_info "Checking supervisor status..."
+		sudo supervisorctl status || true
 	fi
 
 	# Install ERPNext if requested
