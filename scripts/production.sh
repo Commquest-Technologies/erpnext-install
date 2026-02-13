@@ -17,14 +17,13 @@ bench --site "$SITE_NAME" set-maintenance-mode off
 PRODSETUP
 
 	# Setup production config (nginx + supervisor, requires sudo)
-	# Install ansible system-wide so bench setup production can find it
-	# (pipx isolates it inside its venv where the ansible binary isn't on PATH)
-	sudo pip3 install ansible 2>/dev/null || true
-
-	# bench is in the frappe user's ~/.local/bin — pass PATH so bench and its
-	# child processes (e.g. bench setup role fail2ban) can all find the binary
+	# pipx isolates bench and its dependencies (including ansible) inside
+	# ~/.local/share/pipx/venvs/frappe-bench/bin/ — we must add both that
+	# directory and ~/.local/bin to PATH so sudo can find bench, ansible,
+	# ansible-playbook, and all other binaries bench spawns internally
+	PIPX_VENV_BIN="/home/$FRAPPE_USER/.local/share/pipx/venvs/frappe-bench/bin"
 	cd "$BENCH_PATH"
-	sudo env "PATH=/home/$FRAPPE_USER/.local/bin:$PATH" \
+	sudo env "PATH=$PIPX_VENV_BIN:/home/$FRAPPE_USER/.local/bin:$PATH" \
 		bench setup production "$FRAPPE_USER" --yes
 
 	# Wait for Redis Queue before installing apps
