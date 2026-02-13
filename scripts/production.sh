@@ -17,6 +17,10 @@ bench --site "$SITE_NAME" set-maintenance-mode off
 PRODSETUP
 
 	# Setup production config (nginx + supervisor, requires sudo)
+	# Install ansible system-wide so bench setup production can find it
+	# (pipx isolates it inside its venv where the ansible binary isn't on PATH)
+	sudo pip3 install ansible 2>/dev/null || true
+
 	# bench is in the frappe user's ~/.local/bin — pass PATH so bench and its
 	# child processes (e.g. bench setup role fail2ban) can all find the binary
 	cd "$BENCH_PATH"
