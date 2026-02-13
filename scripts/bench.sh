@@ -51,7 +51,11 @@ if [ "$FRAPPE_VER" = "15" ]; then
 fi
 
 if [ ! -d "sites/$SITE_NAME" ]; then
+    # Drop leftover database from a previous install (user was deleted but DB remains)
+    DB_NAME=$(echo "$SITE_NAME" | tr '.' '_' | tr '-' '_')
     if [ -n "$MYSQL_ROOT_PASS" ]; then
+        mysql -uroot -p"$MYSQL_ROOT_PASS" -e "DROP DATABASE IF EXISTS \`$DB_NAME\`;" 2>/dev/null || true
+        mysql -uroot -p"$MYSQL_ROOT_PASS" -e "DROP USER IF EXISTS '$DB_NAME'@'localhost';" 2>/dev/null || true
         bench new-site "$SITE_NAME" \
             --admin-password "$ADMIN_PASS" \
             --mariadb-root-password "$MYSQL_ROOT_PASS"

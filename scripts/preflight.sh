@@ -27,19 +27,50 @@ system_checks() {
 		read -p "Enter username to create [frappe]: " SETUP_USER
 		SETUP_USER=${SETUP_USER:-frappe}
 
-		# If user exists, delete and recreate for a clean setup
+		SETUP_HOME="/home/$SETUP_USER"
+		DEST_DIR="$SETUP_HOME/erpnext-install"
+
 		if id "$SETUP_USER" &>/dev/null; then
 			log_warn "User '$SETUP_USER' already exists."
-			log_info "Removing existing user '$SETUP_USER' for a clean install..."
-			# Kill any running processes owned by this user
-			pkill -u "$SETUP_USER" 2>/dev/null || true
-			sleep 2
-			# Remove user and home directory
-			userdel -r "$SETUP_USER" 2>/dev/null || true
-			rm -rf "/home/$SETUP_USER" 2>/dev/null || true
-			# Remove old sudoers entry
-			rm -f "/etc/sudoers.d/$SETUP_USER" 2>/dev/null || true
-			log_success "User '$SETUP_USER' removed"
+			echo ""
+			read -p "Reuse existing user and continue? [Y/n]: " REUSE_USER
+			REUSE_USER=${REUSE_USER:-Y}
+
+			if [ "$REUSE_USER" = "n" ] || [ "$REUSE_USER" = "N" ]; then
+				log_info "Removing existing user '$SETUP_USER' for a clean install..."
+
+				# Drop any existing site databases from MariaDB before wiping files
+				_cleanup_site_databases "$SETUP_USER"
+
+				# Kill any running processes owned by this user
+				pkill -u "$SETUP_USER" 2>/dev/null || true
+				sleep 2
+				# Remove user and home directory
+				userdel -r "$SETUP_USER" 2>/dev/null || true
+				rm -rf "$SETUP_HOME" 2>/dev/null || true
+				# Remove old sudoers entry
+				rm -f "/etc/sudoers.d/$SETUP_USER" 2>/dev/null || true
+				log_success "User '$SETUP_USER' removed"
+			else
+				log_info "Reusing existing user '$SETUP_USER'"
+
+				# Ensure passwordless sudo
+				if [ ! -f "/etc/sudoers.d/$SETUP_USER" ]; then
+					echo "$SETUP_USER ALL=(ALL) NOPASSWD:ALL" | tee "/etc/sudoers.d/$SETUP_USER" >/dev/null
+					chmod 440 "/etc/sudoers.d/$SETUP_USER"
+				fi
+
+				# Copy installer and re-launch
+				if [ "$SCRIPT_DIR" != "$DEST_DIR" ]; then
+					rm -rf "$DEST_DIR" 2>/dev/null || true
+					cp -r "$SCRIPT_DIR" "$DEST_DIR"
+					chown -R "$SETUP_USER:$SETUP_USER" "$DEST_DIR"
+				fi
+
+				log_info "Re-launching installer as '$SETUP_USER'..."
+				echo ""
+				exec sudo -u "$SETUP_USER" -H bash "$DEST_DIR/install.sh"
+			fi
 		fi
 
 		log_info "Creating user '$SETUP_USER'..."
@@ -55,9 +86,6 @@ system_checks() {
 		chmod 440 "/etc/sudoers.d/$SETUP_USER"
 
 		# Copy the installer to the user's home and re-launch
-		SETUP_HOME="/home/$SETUP_USER"
-		DEST_DIR="$SETUP_HOME/erpnext-install"
-
 		if [ "$SCRIPT_DIR" != "$DEST_DIR" ]; then
 			cp -r "$SCRIPT_DIR" "$DEST_DIR"
 			chown -R "$SETUP_USER:$SETUP_USER" "$DEST_DIR"
@@ -69,4 +97,21 @@ system_checks() {
 	fi
 
 	log_success "System checks passed"
+}
+
+_cleanup_site_databases() {
+	local USER=$1
+	local USER_HOME="/home/$USER"
+
+	# Find site_config.json files in any bench installation
+	for site_config in "$USER_HOME"/*/sites/*/site_config.json; do
+		[ -f "$site_config" ] || continue
+		local DB_NAME
+		DB_NAME=$(python3 -c "import json; print(json.load(open('$site_config')).get('db_name',''))" 2>/dev/null) || continue
+		if [ -n "$DB_NAME" ]; then
+			log_info "Dropping database: $DB_NAME"
+			sudo mysql -uroot -e "DROP DATABASE IF EXISTS \`$DB_NAME\`;" 2>/dev/null || true
+			sudo mysql -uroot -e "DROP USER IF EXISTS '$DB_NAME'@'localhost';" 2>/dev/null || true
+		fi
+	done
 }
