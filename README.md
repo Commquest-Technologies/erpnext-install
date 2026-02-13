@@ -27,8 +27,8 @@ A modular bash script to install **Frappe Framework** and **ERPNext** on Ubuntu 
 ```bash
 git clone https://github.com/Commquest-Technologies/erpnext-install.git
 cd erpnext-install
-chmod +x frappe_installer.sh
-./frappe_installer.sh
+chmod +x install.sh
+./install.sh
 ```
 
 You can run this as **root** (typical on a fresh VPS like Vultr, DigitalOcean, etc.) — the script will automatically create a non-root user, set a password, and re-launch itself as that user.
@@ -38,7 +38,7 @@ You can run this as **root** (typical on a fresh VPS like Vultr, DigitalOcean, e
 ### Running as Root (fresh VPS)
 
 ```
-root@server:~# ./frappe_installer.sh
+root@server:~# ./install.sh
 
 [WARN] Running as root. A non-root user is required for Frappe.
 
@@ -104,7 +104,7 @@ The password you set here is for **SSH/login access** to the frappe user (`ssh f
 
 ```
 erpnext-install/
-├── frappe_installer.sh    # Main entry point
+├── install.sh    # Main entry point
 ├── scripts/
 │   ├── utils.sh           # Logging and helper functions
 │   ├── preflight.sh       # OS checks, root-to-user handoff

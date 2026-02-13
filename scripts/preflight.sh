@@ -65,7 +65,7 @@ system_checks() {
 
 		log_info "Re-launching installer as '$SETUP_USER'..."
 		echo ""
-		exec sudo -u "$SETUP_USER" -H bash "$DEST_DIR/frappe_installer.sh"
+		exec sudo -u "$SETUP_USER" -H bash "$DEST_DIR/install.sh"
 	fi
 
 	log_success "System checks passed"
