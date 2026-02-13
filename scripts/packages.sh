@@ -144,8 +144,17 @@ _install_mariadb() {
 	if ! command_exists mariadb; then
 		safe_apt_install mariadb-server mariadb-client
 	fi
-	sudo systemctl enable mariadb 2>/dev/null || true
-	sudo systemctl start mariadb 2>/dev/null || true
+	sudo systemctl enable mariadb
+	sudo systemctl start mariadb
+
+	# Verify MariaDB is actually running
+	if sudo systemctl is-active --quiet mariadb; then
+		log_success "MariaDB is running"
+	else
+		log_error "MariaDB failed to start"
+		sudo systemctl status mariadb --no-pager || true
+		exit 1
+	fi
 }
 
 _install_uv() {

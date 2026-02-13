@@ -4,10 +4,42 @@
 configure_mariadb() {
 	log_info "Configuring MariaDB..."
 
-	MYSQL_ROOT_PASS=""
-	read -p "Do you have a MariaDB root password? (y/n): " HAS_PASSWORD
+	# Ensure MariaDB is running
+	if ! sudo systemctl is-active --quiet mariadb; then
+		log_info "Starting MariaDB..."
+		sudo systemctl start mariadb
+		sleep 2
+	fi
 
-	if [ "$HAS_PASSWORD" = "y" ] || [ "$HAS_PASSWORD" = "Y" ]; then
+	MYSQL_ROOT_PASS=""
+
+	# Try socket authentication first (default on fresh installs)
+	if sudo mysql -uroot -e "SELECT 1;" &>/dev/null; then
+		log_success "MariaDB accessible (socket authentication)"
+
+		read -p "Set a MariaDB root password? (recommended) [Y/n]: " SET_PASS
+		SET_PASS=${SET_PASS:-Y}
+
+		if [[ "$SET_PASS" =~ ^[Yy] ]]; then
+			read -sp "Enter new MariaDB root password: " MYSQL_ROOT_PASS
+			echo
+			read -sp "Confirm password: " MYSQL_ROOT_PASS_CONFIRM
+			echo
+			if [ "$MYSQL_ROOT_PASS" != "$MYSQL_ROOT_PASS_CONFIRM" ]; then
+				log_error "Passwords do not match"
+				exit 1
+			fi
+			sudo mysql -uroot <<SQL
+ALTER USER 'root'@'localhost' IDENTIFIED BY '$MYSQL_ROOT_PASS';
+FLUSH PRIVILEGES;
+SQL
+			log_success "MariaDB root password set"
+		else
+			log_info "Using socket authentication (no password)"
+		fi
+	else
+		# Socket auth didn't work — a root password is already set
+		log_info "MariaDB root password is already set"
 		while true; do
 			read -sp "Enter MariaDB root password: " MYSQL_ROOT_PASS
 			echo
@@ -20,30 +52,6 @@ configure_mariadb() {
 				[ "$RETRY" != "y" ] && [ "$RETRY" != "Y" ] && exit 1
 			fi
 		done
-	else
-		if sudo mysql -uroot -e "SELECT 1;" &>/dev/null; then
-			read -p "Set a new MariaDB root password? (y/n): " SET_PASS
-			if [ "$SET_PASS" = "y" ] || [ "$SET_PASS" = "Y" ]; then
-				read -sp "Enter new password: " MYSQL_ROOT_PASS
-				echo
-				read -sp "Confirm password: " MYSQL_ROOT_PASS_CONFIRM
-				echo
-				if [ "$MYSQL_ROOT_PASS" != "$MYSQL_ROOT_PASS_CONFIRM" ]; then
-					log_error "Passwords do not match"
-					exit 1
-				fi
-				sudo mysql -uroot <<SQL
-ALTER USER 'root'@'localhost' IDENTIFIED BY '$MYSQL_ROOT_PASS';
-FLUSH PRIVILEGES;
-SQL
-				log_success "Password set successfully"
-			else
-				log_info "Using socket authentication"
-			fi
-		else
-			log_error "Cannot access MariaDB. Please configure it manually"
-			exit 1
-		fi
 	fi
 
 	log_info "Applying MariaDB configuration..."
