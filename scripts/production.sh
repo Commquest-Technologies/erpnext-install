@@ -30,6 +30,13 @@ PRODSETUP
 	sudo systemctl enable nginx
 	sudo systemctl restart nginx
 
+	# Fix file permissions so nginx (www-data) can read bench assets
+	# Without this, CSS/JS files return 403 and the site appears unstyled
+	log_info "Setting file permissions for nginx..."
+	sudo usermod -a -G "$FRAPPE_USER" www-data
+	sudo chmod o+rx "/home/$FRAPPE_USER"
+	sudo chmod -R o+rx "$BENCH_PATH"
+
 	# Setup production config (nginx + supervisor, requires sudo)
 	# pipx isolates bench and its dependencies (including ansible) inside
 	# ~/.local/share/pipx/venvs/frappe-bench/bin/ — we must add both that
