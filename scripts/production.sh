@@ -17,10 +17,11 @@ bench --site "$SITE_NAME" set-maintenance-mode off
 PRODSETUP
 
 	# Setup production config (nginx + supervisor, requires sudo)
-	# bench is in the frappe user's ~/.local/bin, which sudo/root can't find
-	BENCH_BIN="/home/$FRAPPE_USER/.local/bin/bench"
+	# bench is in the frappe user's ~/.local/bin — pass PATH so bench and its
+	# child processes (e.g. bench setup role fail2ban) can all find the binary
 	cd "$BENCH_PATH"
-	sudo "$BENCH_BIN" setup production "$FRAPPE_USER" --yes
+	sudo env "PATH=/home/$FRAPPE_USER/.local/bin:$PATH" \
+		bench setup production "$FRAPPE_USER" --yes
 
 	# Wait for Redis Queue before installing apps
 	log_info "Waiting for Redis Queue (port 11001)..."
