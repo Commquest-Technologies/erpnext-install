@@ -23,10 +23,12 @@ PRODSETUP
 		sudo systemctl disable apache2
 	fi
 
-	# Ensure nginx is installed and running before bench configures it
+	# Ensure nginx is installed and running with a valid PID file
+	# (using restart instead of start to guarantee a fresh PID file —
+	# empty PID files cause "reload" to fail, which bench calls internally)
 	safe_apt_install nginx
 	sudo systemctl enable nginx
-	sudo systemctl start nginx || true
+	sudo systemctl restart nginx
 
 	# Setup production config (nginx + supervisor, requires sudo)
 	# pipx isolates bench and its dependencies (including ansible) inside
