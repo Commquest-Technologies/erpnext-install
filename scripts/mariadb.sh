@@ -13,37 +13,48 @@ configure_mariadb() {
 
 	MYSQL_ROOT_PASS=""
 
-	# Try socket authentication first (default on fresh installs)
+	# Try socket auth (works on fresh installs where root uses unix_socket)
 	if sudo mysql -uroot -e "SELECT 1;" &>/dev/null; then
 		log_success "MariaDB accessible (socket authentication)"
+		log_info "A MariaDB root password is required for Frappe/ERPNext."
+		echo ""
 
-		read -p "Set a MariaDB root password? (recommended) [Y/n]: " SET_PASS
-		SET_PASS=${SET_PASS:-Y}
+		read -sp "Enter new MariaDB root password: " MYSQL_ROOT_PASS
+		echo
+		read -sp "Confirm password: " MYSQL_ROOT_PASS_CONFIRM
+		echo
 
-		if [[ "$SET_PASS" =~ ^[Yy] ]]; then
-			read -sp "Enter new MariaDB root password: " MYSQL_ROOT_PASS
-			echo
-			read -sp "Confirm password: " MYSQL_ROOT_PASS_CONFIRM
-			echo
-			if [ "$MYSQL_ROOT_PASS" != "$MYSQL_ROOT_PASS_CONFIRM" ]; then
-				log_error "Passwords do not match"
-				exit 1
-			fi
-			sudo mysql -uroot <<SQL
-ALTER USER 'root'@'localhost' IDENTIFIED BY '$MYSQL_ROOT_PASS';
+		if [ -z "$MYSQL_ROOT_PASS" ]; then
+			log_error "Password cannot be empty"
+			exit 1
+		fi
+
+		if [ "$MYSQL_ROOT_PASS" != "$MYSQL_ROOT_PASS_CONFIRM" ]; then
+			log_error "Passwords do not match"
+			exit 1
+		fi
+
+		# Switch root to mysql_native_password so bench can connect without sudo
+		sudo mysql -uroot <<SQL
+ALTER USER 'root'@'localhost' IDENTIFIED VIA mysql_native_password USING PASSWORD('$MYSQL_ROOT_PASS') OR unix_socket;
 FLUSH PRIVILEGES;
 SQL
-			log_success "MariaDB root password set"
+
+		# Verify password works WITHOUT sudo (this is how bench connects)
+		if mysql -uroot -p"$MYSQL_ROOT_PASS" -e "SELECT 1;" &>/dev/null; then
+			log_success "MariaDB root password set and verified"
 		else
-			log_info "Using socket authentication (no password)"
+			log_error "MariaDB password verification failed. bench will not be able to connect."
+			exit 1
 		fi
 	else
-		# Socket auth didn't work — a root password is already set
-		log_info "MariaDB root password is already set"
+		# Socket auth failed — a root password is already set
+		log_info "MariaDB root password detected"
 		while true; do
 			read -sp "Enter MariaDB root password: " MYSQL_ROOT_PASS
 			echo
-			if sudo mysql -uroot -p"$MYSQL_ROOT_PASS" -e "SELECT 1;" &>/dev/null; then
+			# Verify WITHOUT sudo — this is how bench actually connects
+			if mysql -uroot -p"$MYSQL_ROOT_PASS" -e "SELECT 1;" &>/dev/null; then
 				log_success "Password verified"
 				break
 			else

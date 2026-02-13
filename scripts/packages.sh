@@ -122,7 +122,9 @@ _install_yarn() {
 	if ! command_exists yarn; then
 		sudo npm install -g yarn
 	fi
-	log_success "Yarn $(yarn --version)"
+	# Clean up root's .yarnrc to avoid permission errors for non-root users
+	sudo rm -f /root/.yarnrc 2>/dev/null || true
+	log_success "Yarn installed"
 }
 
 _install_redis() {
