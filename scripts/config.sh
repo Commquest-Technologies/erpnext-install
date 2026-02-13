@@ -8,7 +8,8 @@ collect_user_input() {
 	echo "=========================================="
 	echo ""
 
-	read -p "Enter Frappe version (15 or 16): " FRAPPE_VER
+	read -p "Enter Frappe version (15 or 16) [16]: " FRAPPE_VER
+	FRAPPE_VER=${FRAPPE_VER:-16}
 	if [ "$FRAPPE_VER" != "15" ] && [ "$FRAPPE_VER" != "16" ]; then
 		log_error "Invalid version. Enter 15 or 16"
 		exit 1
