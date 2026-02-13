@@ -16,6 +16,18 @@ bench --site "$SITE_NAME" enable-scheduler
 bench --site "$SITE_NAME" set-maintenance-mode off
 PRODSETUP
 
+	# Stop Apache if running (it holds port 80 and blocks nginx)
+	if sudo systemctl is-active --quiet apache2 2>/dev/null; then
+		log_info "Stopping Apache (conflicts with nginx on port 80)..."
+		sudo systemctl stop apache2
+		sudo systemctl disable apache2
+	fi
+
+	# Ensure nginx is installed and running before bench configures it
+	safe_apt_install nginx
+	sudo systemctl enable nginx
+	sudo systemctl start nginx || true
+
 	# Setup production config (nginx + supervisor, requires sudo)
 	# pipx isolates bench and its dependencies (including ansible) inside
 	# ~/.local/share/pipx/venvs/frappe-bench/bin/ — we must add both that
