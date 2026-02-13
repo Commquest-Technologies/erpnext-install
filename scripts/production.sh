@@ -5,9 +5,12 @@ setup_production() {
 	log_info "Setting up production..."
 
 	# Enable scheduler and disable maintenance (run as frappe user)
-	sudo -u "$FRAPPE_USER" -H bash <<PRODSETUP
+	sudo -u "$FRAPPE_USER" -H env \
+		"BENCH_PATH=$BENCH_PATH" \
+		"SITE_NAME=$SITE_NAME" \
+		bash <<'PRODSETUP'
 set -e
-export PATH="\$HOME/.local/bin:\$PATH"
+export PATH="$HOME/.local/bin:$PATH"
 cd "$BENCH_PATH"
 bench --site "$SITE_NAME" enable-scheduler
 bench --site "$SITE_NAME" set-maintenance-mode off
@@ -35,9 +38,12 @@ PRODSETUP
 	# Install ERPNext if requested
 	if [ "$INSTALL_ERPNEXT" = "yes" ]; then
 		log_info "Installing ERPNext on site..."
-		sudo -u "$FRAPPE_USER" -H bash <<ERPINSTALL
+		sudo -u "$FRAPPE_USER" -H env \
+			"BENCH_PATH=$BENCH_PATH" \
+			"SITE_NAME=$SITE_NAME" \
+			bash <<'ERPINSTALL'
 set -e
-export PATH="\$HOME/.local/bin:\$PATH"
+export PATH="$HOME/.local/bin:$PATH"
 cd "$BENCH_PATH"
 bench --site "$SITE_NAME" install-app erpnext
 ERPINSTALL

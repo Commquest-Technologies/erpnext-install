@@ -4,15 +4,19 @@
 setup_dev_mode() {
 	log_info "Starting development mode..."
 
-	sudo -u "$FRAPPE_USER" -H bash <<DEVMODE
+	sudo -u "$FRAPPE_USER" -H env \
+		"BENCH_PATH=$BENCH_PATH" \
+		"SITE_NAME=$SITE_NAME" \
+		"INSTALL_ERPNEXT=$INSTALL_ERPNEXT" \
+		bash <<'DEVMODE'
 set -e
-export PATH="\$HOME/.local/bin:\$PATH"
+export PATH="$HOME/.local/bin:$PATH"
 
 cd "$BENCH_PATH"
 
 nohup bench start > bench.log 2>&1 &
-BENCH_PID=\$!
-echo "Bench started with PID: \$BENCH_PID"
+BENCH_PID=$!
+echo "Bench started with PID: $BENCH_PID"
 
 sleep 10
 
@@ -21,7 +25,7 @@ for i in {1..30}; do
         echo "Redis Queue is ready"
         break
     fi
-    echo "Waiting for Redis Queue... (\$i/30)"
+    echo "Waiting for Redis Queue... ($i/30)"
     sleep 2
 done
 

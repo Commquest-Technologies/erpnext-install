@@ -18,9 +18,20 @@ BENCHINSTALL
 
 	log_info "Initializing Bench..."
 
-	sudo -u "$FRAPPE_USER" -H bash <<BENCHINIT
+	# Pass all variables via env to avoid heredoc double-expansion issues
+	# (passwords with $, !, `, \ etc. would get corrupted in unquoted heredocs)
+	sudo -u "$FRAPPE_USER" -H env \
+		"FRAPPE_HOME=$FRAPPE_HOME" \
+		"BENCH_PATH=$BENCH_PATH" \
+		"PYTHON_BIN=$PYTHON_BIN" \
+		"FRAPPE_BRANCH=$FRAPPE_BRANCH" \
+		"FRAPPE_VER=$FRAPPE_VER" \
+		"SITE_NAME=$SITE_NAME" \
+		"ADMIN_PASS=$ADMIN_PASS" \
+		"MYSQL_ROOT_PASS=$MYSQL_ROOT_PASS" \
+		bash <<'BENCHINIT'
 set -e
-export PATH="\$HOME/.local/bin:\$PATH"
+export PATH="$HOME/.local/bin:$PATH"
 
 cd "$FRAPPE_HOME"
 
@@ -58,9 +69,12 @@ BENCHINIT
 	# Only download ERPNext if user chose to install it
 	if [ "$INSTALL_ERPNEXT" = "yes" ]; then
 		log_info "Downloading ERPNext..."
-		sudo -u "$FRAPPE_USER" -H bash <<GETERPNEXT
+		sudo -u "$FRAPPE_USER" -H env \
+			"BENCH_PATH=$BENCH_PATH" \
+			"FRAPPE_BRANCH=$FRAPPE_BRANCH" \
+			bash <<'GETERPNEXT'
 set -e
-export PATH="\$HOME/.local/bin:\$PATH"
+export PATH="$HOME/.local/bin:$PATH"
 cd "$BENCH_PATH"
 if [ ! -d "apps/erpnext" ]; then
     bench get-app erpnext --branch "$FRAPPE_BRANCH"

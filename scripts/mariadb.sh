@@ -35,8 +35,10 @@ configure_mariadb() {
 		fi
 
 		# Switch root to mysql_native_password so bench can connect without sudo
+		# Escape single quotes in password for SQL safety
+		SAFE_PASS="${MYSQL_ROOT_PASS//\'/\'\'}"
 		sudo mysql -uroot <<SQL
-ALTER USER 'root'@'localhost' IDENTIFIED VIA mysql_native_password USING PASSWORD('$MYSQL_ROOT_PASS') OR unix_socket;
+ALTER USER 'root'@'localhost' IDENTIFIED VIA mysql_native_password USING PASSWORD('$SAFE_PASS') OR unix_socket;
 FLUSH PRIVILEGES;
 SQL
 
