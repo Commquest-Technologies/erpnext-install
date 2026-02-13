@@ -24,6 +24,7 @@ PRODSETUP
 	PIPX_VENV_BIN="/home/$FRAPPE_USER/.local/share/pipx/venvs/frappe-bench/bin"
 	cd "$BENCH_PATH"
 	sudo env "PATH=$PIPX_VENV_BIN:/home/$FRAPPE_USER/.local/bin:$PATH" \
+		"ANSIBLE_ALLOW_BROKEN_CONDITIONALS=true" \
 		bench setup production "$FRAPPE_USER" --yes
 
 	# Wait for Redis Queue before installing apps
