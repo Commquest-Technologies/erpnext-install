@@ -23,12 +23,12 @@ PRODSETUP
 		sudo systemctl disable apache2
 	fi
 
-	# Ensure nginx is installed and running with a valid PID file
-	# (using restart instead of start to guarantee a fresh PID file —
-	# empty PID files cause "reload" to fail, which bench calls internally)
-	safe_apt_install nginx
+	# Ensure nginx and supervisor are installed and running
+	safe_apt_install nginx supervisor
 	sudo systemctl enable nginx
 	sudo systemctl restart nginx
+	sudo systemctl enable supervisor
+	sudo systemctl start supervisor
 
 	# Fix file permissions so nginx (www-data) can read bench assets
 	# Without this, CSS/JS files return 403 and the site appears unstyled
@@ -48,12 +48,43 @@ PRODSETUP
 		"ANSIBLE_ALLOW_BROKEN_CONDITIONALS=true" \
 		bench setup production "$FRAPPE_USER" --yes
 
+	# Ensure supervisor config exists and is linked
+	# bench setup production sometimes fails to create the symlink
+	log_info "Verifying supervisor configuration..."
+	BENCH_NAME=$(basename "$BENCH_PATH")
+	SUPERVISOR_CONF="/etc/supervisor/conf.d/$BENCH_NAME.conf"
+
+	if [ ! -f "$SUPERVISOR_CONF" ]; then
+		log_warn "Supervisor config missing — generating manually..."
+
+		# Generate supervisor config via bench
+		sudo -u "$FRAPPE_USER" -H env \
+			"BENCH_PATH=$BENCH_PATH" \
+			bash <<'GENSUPERVISOR'
+export PATH="$HOME/.local/bin:$PATH"
+cd "$BENCH_PATH"
+bench setup supervisor --yes
+GENSUPERVISOR
+
+		# Link it into supervisor's conf.d
+		if [ -f "$BENCH_PATH/config/supervisor.conf" ]; then
+			sudo ln -sf "$BENCH_PATH/config/supervisor.conf" "$SUPERVISOR_CONF"
+			log_success "Supervisor config linked"
+		else
+			log_error "Failed to generate supervisor config"
+		fi
+	fi
+
 	# Restart supervisor to ensure all bench processes (including Redis) are running
 	log_info "Restarting supervisor processes..."
 	sudo supervisorctl reread
 	sudo supervisorctl update
 	sudo supervisorctl restart all
 	sleep 5
+
+	# Verify supervisor processes are running
+	log_info "Checking supervisor status..."
+	sudo supervisorctl status || true
 
 	# Read the actual Redis Queue port from bench config
 	REDIS_QUEUE_PORT=$(python3 -c "
@@ -75,8 +106,6 @@ print(m.group(1) if m else '11000')
 
 	if ! redis-cli -p "$REDIS_QUEUE_PORT" ping &>/dev/null; then
 		log_warn "Redis Queue on port $REDIS_QUEUE_PORT is not responding. ERPNext installation may fail."
-		log_info "Checking supervisor status..."
-		sudo supervisorctl status || true
 	fi
 
 	# Install ERPNext if requested
