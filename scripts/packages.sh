@@ -36,8 +36,9 @@ install_system_packages() {
 	fi
 
 	safe_apt_install libjpeg-dev libpng-dev libpq-dev
-	safe_apt_install wkhtmltopdf xvfb libfontconfig ||
-		log_warn "wkhtmltopdf installation failed - PDF generation may not work"
+	safe_apt_install xvfb libfontconfig libfontconfig1
+	_install_wkhtmltopdf
+	_install_fonts
 	safe_apt_install python3-pip python3-setuptools python3-venv pkg-config
 
 	if ! command_exists pipx; then
@@ -53,6 +54,70 @@ install_system_packages() {
 	_install_redis
 	_install_mariadb
 	_install_uv
+}
+
+_install_wkhtmltopdf() {
+	log_info "Installing wkhtmltopdf (patched Qt build)..."
+
+	# Remove any existing apt version (wrong build, missing patched Qt)
+	sudo apt-get remove --purge wkhtmltopdf -y 2>/dev/null || true
+
+	# Detect Ubuntu codename for the correct .deb
+	. /etc/os-release
+	case "$VERSION_CODENAME" in
+	focal) WKHTML_CODENAME="focal" ;;
+	jammy) WKHTML_CODENAME="jammy" ;;
+	noble) WKHTML_CODENAME="jammy" ;; # 24.04 uses the jammy build
+	*) WKHTML_CODENAME="jammy" ;;     # default fallback
+	esac
+
+	local WKHTML_DEB="wkhtmltox_0.12.6.1-3.${WKHTML_CODENAME}_amd64.deb"
+	local WKHTML_URL="https://github.com/wkhtmltopdf/packaging/releases/download/0.12.6.1-3/${WKHTML_DEB}"
+
+	wget -q -O "/tmp/${WKHTML_DEB}" "$WKHTML_URL" || {
+		log_warn "Failed to download wkhtmltopdf - PDF generation may not work"
+		return
+	}
+
+	sudo apt install -y "/tmp/${WKHTML_DEB}" || {
+		sudo apt-get install -f -y
+		sudo apt install -y "/tmp/${WKHTML_DEB}"
+	}
+	rm -f "/tmp/${WKHTML_DEB}"
+
+	# Verify patched Qt build
+	if wkhtmltopdf --version 2>&1 | grep -q "patched qt"; then
+		log_success "wkhtmltopdf installed (patched Qt)"
+	else
+		log_warn "wkhtmltopdf installed but may not be the patched Qt build"
+	fi
+}
+
+_install_fonts() {
+	log_info "Installing fonts for PDF generation..."
+
+	safe_apt_install fonts-liberation fonts-dejavu fonts-freefont-ttf \
+		fontconfig libfontconfig1 fonts-open-sans fonts-roboto
+
+	# Install Inter font (commonly used in ERPNext print formats)
+	if ! fc-list | grep -qi "inter"; then
+		log_info "Installing Inter font..."
+		local INTER_URL="https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip"
+		local INTER_TMP="/tmp/inter-font"
+		mkdir -p "$INTER_TMP"
+		wget -q -O "$INTER_TMP/inter.zip" "$INTER_URL" && {
+			unzip -qo "$INTER_TMP/inter.zip" -d "$INTER_TMP"
+			sudo mkdir -p /usr/share/fonts/inter
+			find "$INTER_TMP" -name "*.ttf" -exec sudo cp {} /usr/share/fonts/inter/ \;
+			rm -rf "$INTER_TMP"
+			log_success "Inter font installed"
+		} || log_warn "Failed to download Inter font - you can install it manually later"
+	else
+		log_success "Inter font already installed"
+	fi
+
+	sudo fc-cache -f -v >/dev/null 2>&1
+	log_success "Font cache rebuilt"
 }
 
 _install_python() {
