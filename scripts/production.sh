@@ -36,7 +36,15 @@ PRODSETUP
 	# Ensure nginx and supervisor are installed and running
 	safe_apt_install nginx supervisor
 	sudo systemctl enable nginx
-	sudo systemctl restart nginx
+	# Remove stale bench nginx config from previous runs so nginx can start clean
+	# (bench setup production will regenerate and reload nginx properly)
+	if ! sudo nginx -t 2>/dev/null; then
+		log_warn "Nginx config invalid — cleaning stale bench configs..."
+		sudo rm -f /etc/nginx/conf.d/*frappe* /etc/nginx/conf.d/*bench* 2>/dev/null || true
+		BENCH_NAME_TMP=$(basename "$BENCH_PATH")
+		sudo rm -f "/etc/nginx/sites-enabled/$BENCH_NAME_TMP" 2>/dev/null || true
+	fi
+	sudo systemctl restart nginx || log_warn "Nginx restart deferred to bench setup"
 	sudo systemctl enable supervisor
 	sudo systemctl start supervisor
 
