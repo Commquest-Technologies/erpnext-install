@@ -54,11 +54,9 @@ PRODSETUP
 	# ansible-playbook, and all other binaries bench spawns internally
 	PIPX_VENV_BIN="/home/$FRAPPE_USER/.local/share/pipx/venvs/frappe-bench/bin"
 	cd "$BENCH_PATH"
-	sudo env "PATH=$PIPX_VENV_BIN:/home/$FRAPPE_USER/.local/bin:$PATH" \
-		"ANSIBLE_ALLOW_BROKEN_CONDITIONALS=true" \
-		bench setup production "$FRAPPE_USER" --yes
 
-	# Enable DNS multi-tenancy if multiple domains
+	# Enable DNS multi-tenancy BEFORE production setup so nginx config
+	# routes all sites on port 80 by hostname instead of separate ports
 	if [ "$MULTI_TENANT" = "true" ]; then
 		log_info "Enabling DNS multi-tenancy..."
 		sudo -u "$FRAPPE_USER" -H env \
@@ -69,13 +67,12 @@ export PATH="$HOME/.local/bin:$PATH"
 cd "$BENCH_PATH"
 bench config dns_multitenant on
 MULTITENANT
-
-		# Regenerate nginx config for multi-tenant and reload
-		sudo env "PATH=$PIPX_VENV_BIN:/home/$FRAPPE_USER/.local/bin:$PATH" \
-			bench setup nginx --yes
-		sudo systemctl reload nginx
 		log_success "DNS multi-tenancy enabled"
 	fi
+
+	sudo env "PATH=$PIPX_VENV_BIN:/home/$FRAPPE_USER/.local/bin:$PATH" \
+		"ANSIBLE_ALLOW_BROKEN_CONDITIONALS=true" \
+		bench setup production "$FRAPPE_USER" --yes
 
 	# Ensure supervisor config exists and is linked
 	# bench setup production sometimes fails to create the symlink
