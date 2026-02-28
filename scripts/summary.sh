@@ -13,12 +13,22 @@ print_summary() {
 	echo "  Python     : $PYTHON_BIN"
 	echo "  Node.js    : $(node -v)"
 	echo "  Bench      : $BENCH_PATH"
-	echo "  Site       : $SITE_NAME"
 	echo "  ERPNext    : ${INSTALL_ERPNEXT:-no}"
 	echo ""
 	if [ -n "$DOMAIN" ]; then
-		echo "  URL        : https://$DOMAIN"
+		if [ "$MULTI_TENANT" = "true" ]; then
+			echo "  Sites:"
+			IFS=',' read -ra DOMAIN_LIST <<< "$DOMAINS"
+			for d in "${DOMAIN_LIST[@]}"; do
+				d=$(echo "$d" | xargs)
+				echo "    - https://$d"
+			done
+		else
+			echo "  Site       : $SITE_NAME"
+			echo "  URL        : https://$DOMAIN"
+		fi
 	else
+		echo "  Site       : $SITE_NAME"
 		echo "  URL        : http://$SERVER_IP:8000"
 	fi
 	echo ""

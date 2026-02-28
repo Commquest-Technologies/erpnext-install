@@ -21,10 +21,39 @@ collect_user_input() {
 	read -p "Enter bench name [frappe-bench]: " BENCH_NAME
 	BENCH_NAME=${BENCH_NAME:-frappe-bench}
 
-	read -p "Enter site name: " SITE_NAME
-	if [ -z "$SITE_NAME" ]; then
-		log_error "Site name cannot be empty"
-		exit 1
+	# Domain(s) — ask before site name so we can auto-set it
+	echo ""
+	echo "Enter domain(s), comma-separated (leave empty for dev mode)."
+	echo "  Single domain  : example.com"
+	echo "  Multi-tenant   : site1.com,site2.com,site3.com"
+	read -p "Domain(s): " DOMAIN_INPUT
+
+	MULTI_TENANT="false"
+	DOMAINS=""
+	DOMAIN=""
+
+	if [ -n "$DOMAIN_INPUT" ]; then
+		# Trim spaces around commas and set variables
+		DOMAINS=$(echo "$DOMAIN_INPUT" | sed 's/ *, */,/g')
+		# First domain is the primary
+		DOMAIN=$(echo "$DOMAINS" | cut -d',' -f1)
+
+		# Check if multi-tenant (more than one domain)
+		local DOMAIN_COUNT
+		DOMAIN_COUNT=$(echo "$DOMAINS" | tr ',' '\n' | wc -l | xargs)
+		if [ "$DOMAIN_COUNT" -gt 1 ]; then
+			MULTI_TENANT="true"
+		fi
+
+		# Auto-set site name to primary domain
+		SITE_NAME="$DOMAIN"
+		log_info "Primary site set to: $SITE_NAME"
+	else
+		read -p "Enter site name: " SITE_NAME
+		if [ -z "$SITE_NAME" ]; then
+			log_error "Site name cannot be empty"
+			exit 1
+		fi
 	fi
 
 	read -sp "Enter admin password: " ADMIN_PASS
@@ -33,8 +62,6 @@ collect_user_input() {
 		log_error "Admin password cannot be empty"
 		exit 1
 	fi
-
-	read -p "Enter domain (leave empty for dev mode): " DOMAIN
 
 	if [ "$FRAPPE_VER" = "15" ]; then
 		PYTHON_VER="3.10"
@@ -67,7 +94,15 @@ collect_user_input() {
 	echo "  Bench Path     : $BENCH_PATH"
 	echo "  Site           : $SITE_NAME"
 	echo "  ERPNext        : $INSTALL_ERPNEXT"
-	[ -n "$DOMAIN" ] && echo "  Domain         : $DOMAIN (Production)" || echo "  Mode           : Development"
+	if [ -n "$DOMAIN" ]; then
+		if [ "$MULTI_TENANT" = "true" ]; then
+			echo "  Domains        : $DOMAINS (Multi-tenant)"
+		else
+			echo "  Domain         : $DOMAIN (Production)"
+		fi
+	else
+		echo "  Mode           : Development"
+	fi
 	echo ""
 
 	read -p "Continue with these settings? [Y/n]: " CONFIRM

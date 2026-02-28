@@ -4,16 +4,26 @@
 setup_production() {
 	log_info "Setting up production..."
 
-	# Enable scheduler and disable maintenance (run as frappe user)
+	# Build site list for multi-tenant support
+	local ALL_SITES="$SITE_NAME"
+	if [ "$MULTI_TENANT" = "true" ]; then
+		ALL_SITES="$DOMAINS"
+	fi
+
+	# Enable scheduler and disable maintenance for all sites (run as frappe user)
 	sudo -u "$FRAPPE_USER" -H env \
 		"BENCH_PATH=$BENCH_PATH" \
-		"SITE_NAME=$SITE_NAME" \
+		"ALL_SITES=$ALL_SITES" \
 		bash <<'PRODSETUP'
 set -e
 export PATH="$HOME/.local/bin:$PATH"
 cd "$BENCH_PATH"
-bench --site "$SITE_NAME" enable-scheduler
-bench --site "$SITE_NAME" set-maintenance-mode off
+IFS=',' read -ra SITE_LIST <<< "$ALL_SITES"
+for site in "${SITE_LIST[@]}"; do
+    site=$(echo "$site" | xargs)
+    bench --site "$site" enable-scheduler
+    bench --site "$site" set-maintenance-mode off
+done
 PRODSETUP
 
 	# Stop Apache if running (it holds port 80 and blocks nginx)
@@ -47,6 +57,25 @@ PRODSETUP
 	sudo env "PATH=$PIPX_VENV_BIN:/home/$FRAPPE_USER/.local/bin:$PATH" \
 		"ANSIBLE_ALLOW_BROKEN_CONDITIONALS=true" \
 		bench setup production "$FRAPPE_USER" --yes
+
+	# Enable DNS multi-tenancy if multiple domains
+	if [ "$MULTI_TENANT" = "true" ]; then
+		log_info "Enabling DNS multi-tenancy..."
+		sudo -u "$FRAPPE_USER" -H env \
+			"BENCH_PATH=$BENCH_PATH" \
+			bash <<'MULTITENANT'
+set -e
+export PATH="$HOME/.local/bin:$PATH"
+cd "$BENCH_PATH"
+bench config dns_multitenant on
+MULTITENANT
+
+		# Regenerate nginx config for multi-tenant and reload
+		sudo env "PATH=$PIPX_VENV_BIN:/home/$FRAPPE_USER/.local/bin:$PATH" \
+			bench setup nginx --yes
+		sudo systemctl reload nginx
+		log_success "DNS multi-tenancy enabled"
+	fi
 
 	# Ensure supervisor config exists and is linked
 	# bench setup production sometimes fails to create the symlink
@@ -108,24 +137,46 @@ print(m.group(1) if m else '11000')
 		log_warn "Redis Queue on port $REDIS_QUEUE_PORT is not responding. ERPNext installation may fail."
 	fi
 
-	# Install ERPNext if requested
+	# Install ERPNext if requested — on all sites
 	if [ "$INSTALL_ERPNEXT" = "yes" ]; then
-		log_info "Installing ERPNext on site..."
+		log_info "Installing ERPNext on site(s)..."
 		sudo -u "$FRAPPE_USER" -H env \
 			"BENCH_PATH=$BENCH_PATH" \
-			"SITE_NAME=$SITE_NAME" \
+			"ALL_SITES=$ALL_SITES" \
 			bash <<'ERPINSTALL'
 set -e
 export PATH="$HOME/.local/bin:$PATH"
 cd "$BENCH_PATH"
-bench --site "$SITE_NAME" install-app erpnext
+IFS=',' read -ra SITE_LIST <<< "$ALL_SITES"
+for site in "${SITE_LIST[@]}"; do
+    site=$(echo "$site" | xargs)
+    echo "Installing ERPNext on $site..."
+    bench --site "$site" install-app erpnext
+done
 ERPINSTALL
 		log_success "ERPNext installed"
 	else
 		log_info "Skipping ERPNext installation (user chose not to install)"
 	fi
 
+	_setup_logrotate
 	_setup_ssl
+}
+
+_setup_logrotate() {
+	log_info "Setting up logrotate for bench logs..."
+	cat <<EOF | sudo tee /etc/logrotate.d/frappe-bench >/dev/null
+$BENCH_PATH/logs/*.log {
+    weekly
+    rotate 12
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}
+EOF
+	log_success "Logrotate configured"
 }
 
 _setup_ssl() {
@@ -135,9 +186,28 @@ _setup_ssl() {
 	sudo snap install --classic certbot 2>/dev/null || true
 	sudo ln -sf /snap/bin/certbot /usr/bin/certbot 2>/dev/null || true
 
-	if sudo certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --register-unsafely-without-email 2>/dev/null; then
-		log_success "SSL certificate installed"
+	# Build domain flags for certbot
+	local CERTBOT_DOMAINS=""
+	if [ "$MULTI_TENANT" = "true" ]; then
+		IFS=',' read -ra DOMAIN_LIST <<< "$DOMAINS"
+		for d in "${DOMAIN_LIST[@]}"; do
+			d=$(echo "$d" | xargs)
+			CERTBOT_DOMAINS="$CERTBOT_DOMAINS -d $d"
+		done
 	else
-		log_warn "SSL setup failed. Run manually: sudo certbot --nginx -d $DOMAIN"
+		CERTBOT_DOMAINS="-d $DOMAIN"
+	fi
+
+	if sudo certbot --nginx $CERTBOT_DOMAINS --non-interactive --agree-tos --register-unsafely-without-email 2>/dev/null; then
+		log_success "SSL certificate installed"
+
+		# Verify auto-renewal is working
+		if sudo certbot renew --dry-run 2>/dev/null; then
+			log_success "SSL auto-renewal verified"
+		else
+			log_warn "SSL auto-renewal dry-run failed. Check: sudo certbot renew --dry-run"
+		fi
+	else
+		log_warn "SSL setup failed. Run manually: sudo certbot --nginx $CERTBOT_DOMAINS"
 	fi
 }

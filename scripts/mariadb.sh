@@ -72,7 +72,10 @@ SQL
 [mysqld]
 character-set-server = utf8mb4
 collation-server = utf8mb4_unicode_ci
+character-set-client-handshake = FALSE
 innodb_buffer_pool_size = 256M
+innodb_file_per_table = 1
+innodb_large_prefix = ON
 
 [mysql]
 default-character-set = utf8mb4

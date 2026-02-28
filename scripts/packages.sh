@@ -1,7 +1,41 @@
 #!/usr/bin/env bash
 # System update, user verification, and package installation (Python, Node, Yarn, Redis, MariaDB, uv)
 
+_setup_swap() {
+	if swapon --show | grep -q '/'; then
+		log_success "Swap already exists"
+		return
+	fi
+
+	local RAM_MB
+	RAM_MB=$(free -m | awk '/^Mem:/{print $2}')
+
+	local SWAP_SIZE
+	if [ "$RAM_MB" -le 2048 ]; then
+		SWAP_SIZE="4G"
+	elif [ "$RAM_MB" -le 4096 ]; then
+		SWAP_SIZE="2G"
+	else
+		SWAP_SIZE="1G"
+	fi
+
+	log_info "Creating ${SWAP_SIZE} swap file (RAM: ${RAM_MB}MB)..."
+	sudo fallocate -l "$SWAP_SIZE" /swapfile
+	sudo chmod 600 /swapfile
+	sudo mkswap /swapfile
+	sudo swapon /swapfile
+
+	# Persist across reboots
+	if ! grep -q '/swapfile' /etc/fstab; then
+		echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab >/dev/null
+	fi
+
+	log_success "Swap configured: $SWAP_SIZE"
+}
+
 install_system_packages() {
+	_setup_swap
+
 	log_info "Updating system packages..."
 	sudo apt-get update -y
 	sudo apt-get upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
@@ -24,7 +58,7 @@ install_system_packages() {
 	fi
 
 	log_info "Installing system dependencies..."
-	safe_apt_install git curl wget software-properties-common
+	safe_apt_install git curl wget unzip software-properties-common
 	safe_apt_install build-essential libffi-dev libssl-dev zlib1g-dev \
 		libbz2-dev libreadline-dev libsqlite3-dev libncurses5-dev \
 		libncursesw5-dev xz-utils tk-dev liblzma-dev
